@@ -4,11 +4,8 @@ module Lib where
 
 import Text.ParserCombinators.Parsec hiding (spaces)
 
-symbol :: Parser Char
-symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
-
-spaces :: Parser ()
-spaces = skipMany1 space
+main :: IO ()
+main = getLine >>= putStrLn . readExpr
 
 data LispVal
   = Atom String
@@ -18,6 +15,15 @@ data LispVal
   | String String
   | Bool Bool
   deriving stock (Show, Eq)
+
+charsEscape :: [Char]
+charsEscape = ['\\', '"']
+
+symbol :: Parser Char
+symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
+
+spaces :: Parser ()
+spaces = skipMany1 space
 
 parseAtom :: Parser LispVal
 parseAtom = do
@@ -35,7 +41,7 @@ parseNumber = Number . read <$> many1 digit
 parseString :: Parser LispVal
 parseString = do
   char '"'
-  x <- many (noneOf "\"")
+  x <- many ((char '\\' >> oneOf charsEscape) <|> noneOf charsEscape)
   char '"'
   pure (String x)
 
@@ -46,6 +52,3 @@ readExpr :: String -> String
 readExpr s = case parse parseExpr "lisp" s of
   Left err -> "No match: " ++ show err
   Right val -> "Found value: " ++ show val
-
-main :: IO ()
-main = getLine >>= putStrLn . readExpr
