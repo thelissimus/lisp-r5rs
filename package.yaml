@@ -1,0 +1,14 @@
+name: r5rs
+language: Haskell2010
+
+library:
+  source-dirs: src
+  dependencies:
+    - base
+
+executable:
+  main: Main.hs
+  source-dirs: app
+  dependencies:
+    - base
+    - r5rs

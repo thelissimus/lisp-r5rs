@@ -1,0 +1,31 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.2.
+--
+-- see: https://github.com/sol/hpack
+
+name:           r5rs
+version:        0.0.0
+build-type:     Simple
+
+library
+  exposed-modules:
+      Lib
+  other-modules:
+      Paths_r5rs
+  hs-source-dirs:
+      src
+  build-depends:
+      base
+  default-language: Haskell2010
+
+executable r5rs
+  main-is: Main.hs
+  other-modules:
+      Paths_r5rs
+  hs-source-dirs:
+      app
+  build-depends:
+      base
+    , r5rs
+  default-language: Haskell2010
