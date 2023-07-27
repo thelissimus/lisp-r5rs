@@ -1,6 +1,6 @@
 {-# LANGUAGE DerivingStrategies #-}
 
-module Lib where
+module Lib (module Lib) where
 
 import Text.ParserCombinators.Parsec hiding (spaces)
 
@@ -16,8 +16,19 @@ data LispVal
   | Bool Bool
   deriving stock (Show, Eq)
 
-charsEscape :: [Char]
-charsEscape = ['\\', '"']
+charsEscapeMap :: [(Char, Char)]
+charsEscapeMap = [('\\', '\\'), ('"', '"')]
+
+charsWhiteSpaceMap :: [(Char, Char)]
+charsWhiteSpaceMap = [('n', '\n'), ('r', '\r'), ('t', '\t')]
+
+charMapF :: (Char, Char) -> Parser Char
+charMapF (c, r) = char c >> pure r
+
+escaped :: Parser Char
+escaped = do
+  char '\\'
+  choice . map charMapF $ (charsEscapeMap ++ charsWhiteSpaceMap)
 
 symbol :: Parser Char
 symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
@@ -41,7 +52,7 @@ parseNumber = Number . read <$> many1 digit
 parseString :: Parser LispVal
 parseString = do
   char '"'
-  x <- many ((char '\\' >> oneOf charsEscape) <|> noneOf charsEscape)
+  x <- many (escaped <|> noneOf (map fst charsEscapeMap))
   char '"'
   pure (String x)
 
