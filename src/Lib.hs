@@ -4,7 +4,7 @@
 module Lib (module Lib) where
 
 import Data.Functor ((<&>))
-import Numeric (readBin, readDec, readHex, readOct)
+import Numeric (readBin, readDec, readFloat, readHex, readOct)
 import Text.ParserCombinators.Parsec hiding (spaces)
 
 main :: IO ()
@@ -14,6 +14,7 @@ data LispVal
   = Atom String
   | Bool Bool
   | Number Integer
+  | Float Double
   | Char Char
   | String String
   | List [LispVal]
@@ -35,7 +36,7 @@ escaped = do
   choice . map charMapF $ (charsEscapeMap ++ charsWhiteSpaceMap)
 
 symbol :: Parser Char
-symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
+symbol = oneOf "!$%&|*+-/:<=>?@^_~"
 
 spaces :: Parser ()
 spaces = skipMany1 space
@@ -84,6 +85,10 @@ parseNumberHexadecimal = do
   char 'x'
   Number . (fst . head) . readHex <$> many (oneOf "01234567890abcdefABCDEF")
 
+parseFloat :: Parser LispVal
+parseFloat =
+  Float . (fst . head) . readFloat <$> many (oneOf ".0123456789")
+
 parseChar :: Parser LispVal
 parseChar = do
   string "#\\"
@@ -100,7 +105,13 @@ parseString = do
   pure (String x)
 
 parseExpr :: Parser LispVal
-parseExpr = parseAtom <|> parseBool <|> parseNumber <|> parseChar <|> parseString
+parseExpr =
+  parseAtom
+    <|> parseString
+    <|> try parseChar
+    <|> try parseFloat
+    <|> try parseNumber
+    <|> try parseBool
 
 readExpr :: String -> String
 readExpr s = case parse parseExpr "lisp" s of
