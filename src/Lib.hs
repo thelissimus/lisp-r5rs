@@ -4,7 +4,7 @@
 module Lib (module Lib) where
 
 import Data.Complex (Complex ((:+)))
-import Data.Functor ((<&>))
+import Data.Functor (($>), (<&>))
 import Data.Ratio (Rational, (%))
 import Numeric (readBin, readDec, readHex, readOct)
 
@@ -29,6 +29,9 @@ parseExpr =
     <|> try parseNumber
     <|> parseBool
     <|> parseQuoted
+    <|> parseQuasiquote
+    <|> try parseUnquoteSplicing
+    <|> parseUnquote
     <|> parseParens
 
 data LispVal
@@ -140,15 +143,33 @@ parseDottedList = do
 parseParens :: Parser LispVal
 parseParens = do
   char '('
-  x <- try parseList <|> parseDottedList
+  list <- try parseList <|> parseDottedList
   char ')'
-  pure x
+  pure list
 
 parseQuoted :: Parser LispVal
 parseQuoted = do
   char '\''
   expr <- parseExpr
   pure $ List [Atom "quote", expr]
+
+parseQuasiquote :: Parser LispVal
+parseQuasiquote = do
+  char '`'
+  expr <- parseExpr
+  pure $ List [Atom "quasiquote", expr]
+
+parseUnquote :: Parser LispVal
+parseUnquote = do
+  char ','
+  expr <- parseExpr
+  pure $ List [Atom "unquote", expr]
+
+parseUnquoteSplicing :: Parser LispVal
+parseUnquoteSplicing = do
+  string ",@"
+  expr <- parseExpr
+  pure $ List [Atom "unquote-splicing", expr]
 
 charsEscapeMap :: [(Char, Char)]
 charsEscapeMap = [('\\', '\\'), ('"', '"')]
@@ -157,7 +178,7 @@ charsWhiteSpaceMap :: [(Char, Char)]
 charsWhiteSpaceMap = [('n', '\n'), ('r', '\r'), ('t', '\t')]
 
 charMapF :: (Char, Char) -> Parser Char
-charMapF (c, r) = char c >> pure r
+charMapF (c, r) = char c $> r
 
 escaped :: Parser Char
 escaped = do
