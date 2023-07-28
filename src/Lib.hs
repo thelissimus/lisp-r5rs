@@ -3,7 +3,9 @@
 
 module Lib (module Lib) where
 
+import Data.Complex (Complex ((:+)))
 import Data.Functor ((<&>))
+import Data.Ratio ((%))
 import Numeric (readBin, readDec, readFloat, readHex, readOct)
 import Text.ParserCombinators.Parsec hiding (spaces)
 
@@ -14,7 +16,9 @@ data LispVal
   = Atom String
   | Bool Bool
   | Number Integer
+  | Ratio Rational
   | Float Double
+  | Complex (Complex Double)
   | Char Char
   | String String
   | List [LispVal]
@@ -85,9 +89,27 @@ parseNumberHexadecimal = do
   char 'x'
   Number . (fst . head) . readHex <$> many (oneOf "01234567890abcdefABCDEF")
 
+parseRatio :: Parser LispVal
+parseRatio = do
+  n <- read <$> many1 digit
+  char '/'
+  d <- read <$> many1 digit
+  pure $ Ratio (n % d)
+
 parseFloat :: Parser LispVal
 parseFloat =
   Float . (fst . head) . readFloat <$> many (oneOf ".0123456789")
+
+parseComplex :: Parser LispVal
+parseComplex = do
+  r <- toDouble <$> (try parseFloat <|> parseNumberPlain)
+  char '+'
+  i <- toDouble <$> (try parseFloat <|> parseNumberPlain)
+  char 'i'
+  pure $ Complex (r :+ i)
+ where
+  toDouble (Float n) = n
+  toDouble (Number n) = fromIntegral n
 
 parseChar :: Parser LispVal
 parseChar = do
@@ -109,7 +131,9 @@ parseExpr =
   parseAtom
     <|> parseString
     <|> try parseChar
+    <|> try parseComplex
     <|> try parseFloat
+    <|> try parseRatio
     <|> try parseNumber
     <|> try parseBool
 
