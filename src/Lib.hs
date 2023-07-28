@@ -5,8 +5,9 @@ module Lib (module Lib) where
 
 import Data.Complex (Complex ((:+)))
 import Data.Functor ((<&>))
-import Data.Ratio ((%))
-import Numeric (readBin, readDec, readFloat, readHex, readOct)
+import Data.Ratio (Rational, (%))
+import Numeric (readBin, readDec, readHex, readOct)
+
 import Text.ParserCombinators.Parsec hiding (spaces)
 
 main :: IO ()
@@ -26,7 +27,9 @@ parseExpr =
     <|> try parseFloat
     <|> try parseRatio
     <|> try parseNumber
-    <|> try parseBool
+    <|> parseBool
+    <|> parseQuoted
+    <|> parseParens
 
 data LispVal
   = Atom String
@@ -93,8 +96,11 @@ parseRatio = do
   pure $ Ratio (n % d)
 
 parseFloat :: Parser LispVal
-parseFloat =
-  Float . (fst . head) . readFloat <$> many (oneOf ".0123456789")
+parseFloat = do
+  w <- many1 digit
+  char '.'
+  d <- many1 digit
+  pure $ Float (read (w ++ "." ++ d))
 
 parseComplex :: Parser LispVal
 parseComplex = do
@@ -121,6 +127,28 @@ parseString = do
   x <- many (escaped <|> noneOf (map fst charsEscapeMap))
   char '"'
   pure (String x)
+
+parseList :: Parser LispVal
+parseList = List <$> sepBy parseExpr spaces
+
+parseDottedList :: Parser LispVal
+parseDottedList = do
+  head <- endBy parseExpr spaces
+  tail <- char '.' >> spaces >> parseExpr
+  pure $ DottedList head tail
+
+parseParens :: Parser LispVal
+parseParens = do
+  char '('
+  x <- try parseList <|> parseDottedList
+  char ')'
+  pure x
+
+parseQuoted :: Parser LispVal
+parseQuoted = do
+  char '\''
+  expr <- parseExpr
+  pure $ List [Atom "quote", expr]
 
 charsEscapeMap :: [(Char, Char)]
 charsEscapeMap = [('\\', '\\'), ('"', '"')]
