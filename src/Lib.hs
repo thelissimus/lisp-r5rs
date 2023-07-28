@@ -2,6 +2,8 @@
 
 module Lib (module Lib) where
 
+import Data.Functor ((<&>))
+import Numeric (readBin, readDec, readHex, readOct)
 import Text.ParserCombinators.Parsec hiding (spaces)
 
 main :: IO ()
@@ -47,7 +49,35 @@ parseAtom = do
     _ -> Atom atom
 
 parseNumber :: Parser LispVal
-parseNumber = Number . read <$> many1 digit
+parseNumber = parseNumberPlain <|> parseNumberRadix
+
+parseNumberPlain :: Parser LispVal
+parseNumberPlain = Number . read <$> many1 digit
+
+parseNumberRadix :: Parser LispVal
+parseNumberRadix = do
+  char '#'
+  parseNumberBinary <|> parseNumberOctal <|> parseNumberDecimal <|> parseNumberHexadecimal
+
+parseNumberBinary :: Parser LispVal
+parseNumberBinary = do
+  char 'b'
+  Number . (fst . head) . readBin <$> many (oneOf "01")
+
+parseNumberOctal :: Parser LispVal
+parseNumberOctal = do
+  char 'o'
+  Number . (fst . head) . readOct <$> many (oneOf "012344567")
+
+parseNumberDecimal :: Parser LispVal
+parseNumberDecimal = do
+  char 'd'
+  Number . (fst . head) . readDec <$> many (oneOf "0123456789")
+
+parseNumberHexadecimal :: Parser LispVal
+parseNumberHexadecimal = do
+  char 'x'
+  Number . (fst . head) . readHex <$> many (oneOf "01234567890abcdefABCDEF")
 
 parseString :: Parser LispVal
 parseString = do
