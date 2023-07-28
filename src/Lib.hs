@@ -12,6 +12,22 @@ import Text.ParserCombinators.Parsec hiding (spaces)
 main :: IO ()
 main = getLine >>= putStrLn . readExpr
 
+readExpr :: String -> String
+readExpr s = case parse parseExpr "lisp" s of
+  Left err -> "No match: " ++ show err
+  Right val -> "Found value: " ++ show val
+
+parseExpr :: Parser LispVal
+parseExpr =
+  parseAtom
+    <|> parseString
+    <|> try parseChar
+    <|> try parseComplex
+    <|> try parseFloat
+    <|> try parseRatio
+    <|> try parseNumber
+    <|> try parseBool
+
 data LispVal
   = Atom String
   | Bool Bool
@@ -24,26 +40,6 @@ data LispVal
   | List [LispVal]
   | DottedList [LispVal] LispVal
   deriving stock (Show, Eq)
-
-charsEscapeMap :: [(Char, Char)]
-charsEscapeMap = [('\\', '\\'), ('"', '"')]
-
-charsWhiteSpaceMap :: [(Char, Char)]
-charsWhiteSpaceMap = [('n', '\n'), ('r', '\r'), ('t', '\t')]
-
-charMapF :: (Char, Char) -> Parser Char
-charMapF (c, r) = char c >> pure r
-
-escaped :: Parser Char
-escaped = do
-  char '\\'
-  choice . map charMapF $ (charsEscapeMap ++ charsWhiteSpaceMap)
-
-symbol :: Parser Char
-symbol = oneOf "!$%&|*+-/:<=>?@^_~"
-
-spaces :: Parser ()
-spaces = skipMany1 space
 
 parseAtom :: Parser LispVal
 parseAtom = do
@@ -126,18 +122,22 @@ parseString = do
   char '"'
   pure (String x)
 
-parseExpr :: Parser LispVal
-parseExpr =
-  parseAtom
-    <|> parseString
-    <|> try parseChar
-    <|> try parseComplex
-    <|> try parseFloat
-    <|> try parseRatio
-    <|> try parseNumber
-    <|> try parseBool
+charsEscapeMap :: [(Char, Char)]
+charsEscapeMap = [('\\', '\\'), ('"', '"')]
 
-readExpr :: String -> String
-readExpr s = case parse parseExpr "lisp" s of
-  Left err -> "No match: " ++ show err
-  Right val -> "Found value: " ++ show val
+charsWhiteSpaceMap :: [(Char, Char)]
+charsWhiteSpaceMap = [('n', '\n'), ('r', '\r'), ('t', '\t')]
+
+charMapF :: (Char, Char) -> Parser Char
+charMapF (c, r) = char c >> pure r
+
+escaped :: Parser Char
+escaped = do
+  char '\\'
+  choice . map charMapF $ (charsEscapeMap ++ charsWhiteSpaceMap)
+
+symbol :: Parser Char
+symbol = oneOf "!$%&|*+-/:<=>?@^_~"
+
+spaces :: Parser ()
+spaces = skipMany1 space
