@@ -18,7 +18,8 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base
+      array
+    , base
     , parsec
   default-language: Haskell2010
 

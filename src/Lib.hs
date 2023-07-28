@@ -3,6 +3,7 @@
 
 module Lib (module Lib) where
 
+import Data.Array
 import Data.Complex (Complex ((:+)))
 import Data.Functor (($>), (<&>))
 import Data.Ratio (Rational, (%))
@@ -27,11 +28,12 @@ parseExpr =
     <|> try parseFloat
     <|> try parseRatio
     <|> try parseNumber
-    <|> parseBool
+    <|> try parseBool
     <|> parseQuoted
     <|> parseQuasiquote
     <|> try parseUnquoteSplicing
     <|> parseUnquote
+    <|> parseVector
     <|> parseParens
 
 data LispVal
@@ -45,6 +47,7 @@ data LispVal
   | String String
   | List [LispVal]
   | DottedList [LispVal] LispVal
+  | Vector (Array Int LispVal)
   deriving stock (Show, Eq)
 
 parseAtom :: Parser LispVal
@@ -170,6 +173,13 @@ parseUnquoteSplicing = do
   string ",@"
   expr <- parseExpr
   pure $ List [Atom "unquote-splicing", expr]
+
+parseVector :: Parser LispVal
+parseVector = do
+  string "#("
+  vec <- sepBy parseExpr spaces
+  char ')'
+  pure $ Vector (listArray (1, length vec) vec)
 
 charsEscapeMap :: [(Char, Char)]
 charsEscapeMap = [('\\', '\\'), ('"', '"')]
