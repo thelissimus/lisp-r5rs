@@ -34,7 +34,7 @@ parseExpr =
     <|> try parseUnquoteSplicing
     <|> parseUnquote
     <|> parseVector
-    <|> parseParens
+    <|> parseList
 
 data LispVal
   = Atom String
@@ -135,20 +135,28 @@ parseString = do
   pure (String x)
 
 parseList :: Parser LispVal
-parseList = List <$> sepBy parseExpr spaces
+parseList = char '(' >> (parseEmpty <|> parsePopulated)
+ where
+  parseEmpty :: Parser LispVal
+  parseEmpty = char ')' $> List []
 
-parseDottedList :: Parser LispVal
-parseDottedList = do
-  head <- endBy parseExpr spaces
-  tail <- char '.' >> spaces >> parseExpr
-  pure $ DottedList head tail
+  parsePopulated :: Parser LispVal
+  parsePopulated = parseExpr >>= decide . pure
 
-parseParens :: Parser LispVal
-parseParens = do
-  char '('
-  list <- try parseList <|> parseDottedList
-  char ')'
-  pure list
+  decide :: [LispVal] -> Parser LispVal
+  decide expr = plainList expr <|> (spaces >> dottedList expr)
+
+  plainList :: [LispVal] -> Parser LispVal
+  plainList expr = char ')' $> List (reverse expr)
+
+  dottedList :: [LispVal] -> Parser LispVal
+  dottedList expr =
+    do
+      char '.' >> spaces
+      dotted <- parseExpr
+      char ')'
+      pure $ DottedList expr dotted
+      <|> (parseExpr >>= \next -> decide (next : expr))
 
 parseQuoted :: Parser LispVal
 parseQuoted = do
