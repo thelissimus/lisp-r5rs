@@ -33,6 +33,14 @@ primitives =
   , ("mod", numericBinF mod)
   , ("quotient", numericBinF quot)
   , ("remainder", numericBinF rem)
+  , ("not", unaryF notP)
+  , ("boolean?", unaryF booleanP)
+  , ("list?", unaryF listP)
+  , ("symbol?", unaryF symbolP)
+  , ("number?", unaryF numberP)
+  , ("char?", unaryF charP)
+  , ("string?", unaryF stringP)
+  , ("vector?", unaryF vectorP)
   ]
 
 numericBinF :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
@@ -48,6 +56,42 @@ unpackNum = \case
           else fst . head $ parsed
   (List [n]) -> unpackNum n
   _ -> 0
+
+unaryF :: (LispVal -> LispVal) -> [LispVal] -> LispVal
+unaryF = (. head)
+
+notP :: LispVal -> LispVal
+notP (Bool x) = Bool . not $ x
+notP _ = Bool False
+
+booleanP :: LispVal -> LispVal
+booleanP (Bool _) = Bool True
+booleanP _ = Bool False
+
+listP :: LispVal -> LispVal
+listP (List _) = Bool True
+listP (DottedList _ _) = Bool True
+listP _ = Bool False
+
+symbolP :: LispVal -> LispVal
+symbolP (Atom _) = Bool True
+symbolP _ = Bool False
+
+numberP :: LispVal -> LispVal
+numberP (Number _) = Bool True
+numberP _ = Bool False
+
+charP :: LispVal -> LispVal
+charP (Char _) = Bool True
+charP _ = Bool False
+
+stringP :: LispVal -> LispVal
+stringP (String _) = Bool True
+stringP _ = Bool False
+
+vectorP :: LispVal -> LispVal
+vectorP (Vector _) = Bool True
+vectorP _ = Bool False
 
 readExpr :: String -> LispVal
 readExpr s = case parse parseExpr "lisp" s of
