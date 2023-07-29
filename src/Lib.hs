@@ -1,23 +1,58 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE Safe #-}
 
 module Lib (module Lib) where
 
 import Data.Array
 import Data.Complex (Complex ((:+)))
 import Data.Functor (($>), (<&>))
+import Data.List (foldl1')
 import Data.Ratio (Rational, denominator, numerator, (%))
 import Numeric (readBin, readDec, readHex, readOct)
 
 import Text.ParserCombinators.Parsec hiding (spaces)
 
-main :: IO ()
-main = getLine >>= putStrLn . readExpr
+eval :: LispVal -> LispVal
+eval = \case
+  v@(String _) -> v
+  v@(Number _) -> v
+  v@(Bool _) -> v
+  (List [Atom "quote", v]) -> v
+  (List (Atom f : args)) -> apply f . map eval $ args
 
-readExpr :: String -> String
+apply :: String -> [LispVal] -> LispVal
+apply f args = maybe (Bool False) ($ args) . lookup f $ primitives
+
+primitives :: [(String, [LispVal] -> LispVal)]
+primitives =
+  [ ("+", numericBinOp (+))
+  , ("-", numericBinOp (-))
+  , ("*", numericBinOp (*))
+  , ("/", numericBinOp div)
+  , ("mod", numericBinOp mod)
+  , ("quotient", numericBinOp quot)
+  , ("remainder", numericBinOp rem)
+  ]
+
+numericBinOp :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
+numericBinOp f = Number . foldl1' f . map unpackNum
+
+unpackNum :: LispVal -> Integer
+unpackNum = \case
+  (Number n) -> n
+  (String n) ->
+    let parsed = reads n :: [(Integer, String)]
+     in if null parsed
+          then 0
+          else fst . head $ parsed
+  (List [n]) -> unpackNum n
+  _ -> 0
+
+readExpr :: String -> LispVal
 readExpr s = case parse parseExpr "lisp" s of
-  Left err -> "No match: " ++ show err
-  Right val -> "Found value: " ++ show val
+  Left err -> String $ "No match: " ++ show err
+  Right val -> val
 
 parseExpr :: Parser LispVal
 parseExpr =
