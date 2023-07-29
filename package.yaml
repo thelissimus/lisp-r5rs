@@ -1,4 +1,6 @@
 name: r5rs
+license: BSD3
+version: 0.0.0.0
 language: Haskell2010
 
 library:
