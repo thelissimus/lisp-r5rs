@@ -6,7 +6,7 @@ module Lib (module Lib) where
 import Data.Array
 import Data.Complex (Complex ((:+)))
 import Data.Functor (($>), (<&>))
-import Data.Ratio (Rational, (%))
+import Data.Ratio (Rational, denominator, numerator, (%))
 import Numeric (readBin, readDec, readHex, readOct)
 
 import Text.ParserCombinators.Parsec hiding (spaces)
@@ -48,7 +48,25 @@ data LispVal
   | List [LispVal]
   | DottedList [LispVal] LispVal
   | Vector (Array Int LispVal)
-  deriving stock (Show, Eq)
+  deriving stock (Eq)
+
+instance Show LispVal where
+  show = \case
+    (Atom iden) -> iden
+    (Bool True) -> "#t"
+    (Bool False) -> "#f"
+    (Number n) -> show n
+    (Ratio n) -> show (numerator n) ++ "/" ++ show (denominator n)
+    (Float n) -> show n
+    (Complex (r :+ i)) -> show r ++ "+" ++ show i ++ "i"
+    (Char c) -> show c
+    (String s) -> show s
+    (List xs) -> "(" ++ unwordsList xs ++ ")"
+    (DottedList head tail) -> "(" ++ unwordsList head ++ " . " ++ show tail ++ ")"
+    (Vector xs) -> "#(" ++ unwordsList (elems xs) ++ ")"
+   where
+    unwordsList :: [LispVal] -> String
+    unwordsList = unwords . map show
 
 parseAtom :: Parser LispVal
 parseAtom = do
