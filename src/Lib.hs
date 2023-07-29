@@ -41,6 +41,8 @@ primitives =
   , ("char?", unaryF charP)
   , ("string?", unaryF stringP)
   , ("vector?", unaryF vectorP)
+  , ("symbol->string", unaryF symbolToStringP)
+  , ("string->symbol", unaryF stringToSymbolP)
   ]
 
 numericBinF :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
@@ -49,12 +51,6 @@ numericBinF f = Number . foldl1' f . map unpackNum
 unpackNum :: LispVal -> Integer
 unpackNum = \case
   (Number n) -> n
-  (String n) ->
-    let parsed = reads n :: [(Integer, String)]
-     in if null parsed
-          then 0
-          else fst . head $ parsed
-  (List [n]) -> unpackNum n
   _ -> 0
 
 unaryF :: (LispVal -> LispVal) -> [LispVal] -> LispVal
@@ -92,6 +88,12 @@ stringP _ = Bool False
 vectorP :: LispVal -> LispVal
 vectorP (Vector _) = Bool True
 vectorP _ = Bool False
+
+symbolToStringP :: LispVal -> LispVal
+symbolToStringP (Atom s) = String s
+
+stringToSymbolP :: LispVal -> LispVal
+stringToSymbolP (String s) = Atom s
 
 readExpr :: String -> LispVal
 readExpr s = case parse parseExpr "lisp" s of
