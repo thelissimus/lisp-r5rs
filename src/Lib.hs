@@ -4,7 +4,7 @@
 
 module Lib (module Lib) where
 
-import Data.Array
+import Data.Array (Array, elems, listArray)
 import Data.Complex (Complex ((:+)))
 import Data.Functor (($>), (<&>))
 import Data.List (foldl1')
@@ -26,17 +26,17 @@ apply f args = maybe (Bool False) ($ args) . lookup f $ primitives
 
 primitives :: [(String, [LispVal] -> LispVal)]
 primitives =
-  [ ("+", numericBinOp (+))
-  , ("-", numericBinOp (-))
-  , ("*", numericBinOp (*))
-  , ("/", numericBinOp div)
-  , ("mod", numericBinOp mod)
-  , ("quotient", numericBinOp quot)
-  , ("remainder", numericBinOp rem)
+  [ ("+", numericBinF (+))
+  , ("-", numericBinF (-))
+  , ("*", numericBinF (*))
+  , ("/", numericBinF div)
+  , ("mod", numericBinF mod)
+  , ("quotient", numericBinF quot)
+  , ("remainder", numericBinF rem)
   ]
 
-numericBinOp :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
-numericBinOp f = Number . foldl1' f . map unpackNum
+numericBinF :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
+numericBinF f = Number . foldl1' f . map unpackNum
 
 unpackNum :: LispVal -> Integer
 unpackNum = \case
