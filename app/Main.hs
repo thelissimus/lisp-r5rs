@@ -1,13 +1,11 @@
-module Main where
+{-# LANGUAGE Safe #-}
 
-import Lib
+module Main (main) where
+
+import Data.Either (fromRight)
+import Lib (eval, readExpr, trapError)
 
 main :: IO ()
 main = do
   ln <- getLine
-  let res =
-        extractValue
-          . trapError
-          . fmap show
-          $ (eval =<< readExpr ln)
-  putStrLn res
+  putStrLn . fromRight "" . trapError . fmap show $ (eval =<< readExpr ln)

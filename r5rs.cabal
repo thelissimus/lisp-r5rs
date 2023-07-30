@@ -17,7 +17,7 @@ library
       Paths_r5rs
   hs-source-dirs:
       src
-  ghc-options: -Wall -Wextra -Weverything -Wcompat -Wno-implicit-prelude -haddock
+  ghc-options: -Wall -Wextra -Weverything -Wcompat -Wno-implicit-prelude -Wno-unused-do-bind -haddock
   build-depends:
       array
     , base
@@ -31,7 +31,7 @@ executable r5rs
       Paths_r5rs
   hs-source-dirs:
       app
-  ghc-options: -Wall -Wextra -Weverything -Wcompat -Wno-implicit-prelude -haddock
+  ghc-options: -Wall -Wextra -Weverything -Wcompat -Wno-implicit-prelude -Wno-unused-do-bind -haddock
   build-depends:
       base
     , r5rs

@@ -9,6 +9,7 @@ ghc-options:
   - -Weverything
   - -Wcompat
   - -Wno-implicit-prelude
+  - -Wno-unused-do-bind
   - -haddock
 
 library:

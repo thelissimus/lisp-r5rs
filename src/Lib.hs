@@ -1,15 +1,17 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE Safe #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
 
 module Lib (module Lib) where
 
-import Control.Monad.Except
+import Control.Monad.Except (MonadError (catchError, throwError))
 import Data.Array (Array, elems, listArray)
 import Data.Complex (Complex ((:+)))
 import Data.Functor (($>), (<&>))
+import Data.Kind (Type)
 import Data.List (foldl1')
-import Data.Ratio (Rational, denominator, numerator, (%))
+import Data.Ratio (denominator, numerator, (%))
 import Numeric (readBin, readDec, readHex, readOct)
 
 import Text.ParserCombinators.Parsec hiding (spaces)
@@ -127,6 +129,7 @@ parseExpr =
     <|> parseVector
     <|> parseList
 
+type LispVal :: Type
 data LispVal
   = Atom String
   | Bool Bool
@@ -153,9 +156,10 @@ instance Show LispVal where
     (Char c) -> show c
     (String s) -> show s
     (List xs) -> "(" ++ unwordsList xs ++ ")"
-    (DottedList head tail) -> "(" ++ unwordsList head ++ " . " ++ show tail ++ ")"
+    (DottedList xs t) -> "(" ++ unwordsList xs ++ " . " ++ show t ++ ")"
     (Vector xs) -> "#(" ++ unwordsList (elems xs) ++ ")"
 
+type LispError :: Type
 data LispError
   = ArgsArity Integer [LispVal]
   | TypeMismatch String LispVal
@@ -174,9 +178,6 @@ instance Show LispError where
 
 trapError :: (MonadError e m, Show e) => m String -> m String
 trapError = flip catchError (pure . show)
-
-extractValue :: Either LispError a -> a
-extractValue (Right a) = a
 
 parseAtom :: Parser LispVal
 parseAtom = do
