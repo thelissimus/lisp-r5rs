@@ -3,6 +3,14 @@ license: BSD3
 version: 0.0.0.0
 language: Haskell2010
 
+ghc-options:
+  - -Wall
+  - -Wextra
+  - -Weverything
+  - -Wcompat
+  - -Wno-implicit-prelude
+  - -haddock
+
 library:
   source-dirs: src
   dependencies:
