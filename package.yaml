@@ -8,6 +8,7 @@ library:
   dependencies:
     - base
     - array
+    - mtl
     - parsec
 
 executable:

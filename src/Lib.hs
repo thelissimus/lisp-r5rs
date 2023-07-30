@@ -4,6 +4,7 @@
 
 module Lib (module Lib) where
 
+import Control.Monad.Except
 import Data.Array (Array, elems, listArray)
 import Data.Complex (Complex ((:+)))
 import Data.Functor (($>), (<&>))
@@ -13,18 +14,23 @@ import Numeric (readBin, readDec, readHex, readOct)
 
 import Text.ParserCombinators.Parsec hiding (spaces)
 
-eval :: LispVal -> LispVal
+eval :: LispVal -> Either LispError LispVal
 eval = \case
-  v@(String _) -> v
-  v@(Number _) -> v
-  v@(Bool _) -> v
-  (List [Atom "quote", v]) -> v
-  (List (Atom f : args)) -> apply f . map eval $ args
+  v@(String _) -> pure v
+  v@(Number _) -> pure v
+  v@(Bool _) -> pure v
+  (List [Atom "quote", v]) -> pure v
+  (List (Atom f : args)) -> mapM eval args >>= apply f
+  bad -> throwError . BadSpecialForm "Unrecognized special form" $ bad
 
-apply :: String -> [LispVal] -> LispVal
-apply f args = maybe (Bool False) ($ args) . lookup f $ primitives
+apply :: String -> [LispVal] -> Either LispError LispVal
+apply f args =
+  maybe
+    (throwError . NotAFunction "Unrecognized primitive function args" $ f)
+    ($ args)
+    (lookup f primitives)
 
-primitives :: [(String, [LispVal] -> LispVal)]
+primitives :: [(String, [LispVal] -> Either LispError LispVal)]
 primitives =
   [ ("+", numericBinF (+))
   , ("-", numericBinF (-))
@@ -45,16 +51,20 @@ primitives =
   , ("string->symbol", unaryF stringToSymbolP)
   ]
 
-numericBinF :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
-numericBinF f = Number . foldl1' f . map unpackNum
+numericBinF :: (Integer -> Integer -> Integer) -> [LispVal] -> Either LispError LispVal
+numericBinF _ [] = throwError $ ArgsArity 2 []
+numericBinF _ a@[_] = throwError $ ArgsArity 2 a
+numericBinF f as = Number . foldl1' f <$> mapM unpackNum as
 
-unpackNum :: LispVal -> Integer
+unpackNum :: LispVal -> Either LispError Integer
 unpackNum = \case
-  (Number n) -> n
-  _ -> 0
+  (Number n) -> pure n
+  v -> throwError $ TypeMismatch "number" v
 
-unaryF :: (LispVal -> LispVal) -> [LispVal] -> LispVal
-unaryF = (. head)
+unaryF :: (LispVal -> LispVal) -> [LispVal] -> Either LispError LispVal
+unaryF _ [] = throwError $ ArgsArity 1 []
+unaryF f [a] = pure . f $ a
+unaryF _ xs = throwError $ ArgsArity 1 xs
 
 notP :: LispVal -> LispVal
 notP (Bool x) = Bool . not $ x
@@ -95,10 +105,10 @@ symbolToStringP (Atom s) = String s
 stringToSymbolP :: LispVal -> LispVal
 stringToSymbolP (String s) = Atom s
 
-readExpr :: String -> LispVal
+readExpr :: String -> Either LispError LispVal
 readExpr s = case parse parseExpr "lisp" s of
-  Left err -> String $ "No match: " ++ show err
-  Right val -> val
+  Left err -> throwError . ParsingError $ err
+  Right val -> pure val
 
 parseExpr :: Parser LispVal
 parseExpr =
@@ -145,9 +155,28 @@ instance Show LispVal where
     (List xs) -> "(" ++ unwordsList xs ++ ")"
     (DottedList head tail) -> "(" ++ unwordsList head ++ " . " ++ show tail ++ ")"
     (Vector xs) -> "#(" ++ unwordsList (elems xs) ++ ")"
-   where
-    unwordsList :: [LispVal] -> String
-    unwordsList = unwords . map show
+
+data LispError
+  = ArgsArity Integer [LispVal]
+  | TypeMismatch String LispVal
+  | ParsingError ParseError
+  | BadSpecialForm String LispVal
+  | NotAFunction String String
+  deriving stock (Eq)
+
+instance Show LispError where
+  show = \case
+    (ArgsArity n vals) -> "Expected " ++ show n ++ " args; found values " ++ unwordsList vals
+    (TypeMismatch t val) -> "Invalid type: expected " ++ t ++ ", found " ++ show val
+    (ParsingError e) -> "Parse error at " ++ show e
+    (BadSpecialForm msg form) -> msg ++ ": " ++ show form
+    (NotAFunction msg f) -> msg ++ ": " ++ f
+
+trapError :: (MonadError e m, Show e) => m String -> m String
+trapError = flip catchError (pure . show)
+
+extractValue :: Either LispError a -> a
+extractValue (Right a) = a
 
 parseAtom :: Parser LispVal
 parseAtom = do
@@ -307,3 +336,6 @@ symbol = oneOf "!$%&|*+-/:<=>?@^_~"
 
 spaces :: Parser ()
 spaces = skipMany1 space
+
+unwordsList :: [LispVal] -> String
+unwordsList = unwords . map show
