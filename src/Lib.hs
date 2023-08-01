@@ -5,6 +5,7 @@
 
 module Lib (module Lib) where
 
+import Control.Applicative (liftA2)
 import Control.Monad.Except (MonadError (catchError, throwError))
 import Data.Array (Array, elems, listArray)
 import Data.Complex (Complex ((:+)))
@@ -34,39 +35,64 @@ apply f args =
 
 primitives :: [(String, [LispVal] -> Either LispError LispVal)]
 primitives =
-  [ ("+", numericBinF (+))
-  , ("-", numericBinF (-))
-  , ("*", numericBinF (*))
-  , ("/", numericBinF div)
-  , ("mod", numericBinF mod)
-  , ("quotient", numericBinF quot)
-  , ("remainder", numericBinF rem)
-  , ("not", unaryF notP)
-  , ("boolean?", unaryF booleanP)
-  , ("list?", unaryF listP)
-  , ("symbol?", unaryF symbolP)
-  , ("number?", unaryF numberP)
-  , ("char?", unaryF charP)
-  , ("string?", unaryF stringP)
-  , ("vector?", unaryF vectorP)
-  , ("symbol->string", unaryF symbolToStringP)
-  , ("string->symbol", unaryF stringToSymbolP)
+  [ ("+", liftBinNumeric (+))
+  , ("-", liftBinNumeric (-))
+  , ("*", liftBinNumeric (*))
+  , ("/", liftBinNumeric div)
+  , ("mod", liftBinNumeric mod)
+  , ("quotient", liftBinNumeric quot)
+  , ("remainder", liftBinNumeric rem)
+  , ("not", liftUnary notP)
+  , ("boolean?", liftUnary booleanP)
+  , ("list?", liftUnary listP)
+  , ("symbol?", liftUnary symbolP)
+  , ("number?", liftUnary numberP)
+  , ("char?", liftUnary charP)
+  , ("string?", liftUnary stringP)
+  , ("vector?", liftUnary vectorP)
+  , ("symbol->string", liftUnary symbolToStringP)
+  , ("string->symbol", liftUnary stringToSymbolP)
+  , ("=", liftBinBool unpackNumber (==))
+  , ("/=", liftBinBool unpackNumber (/=))
+  , ("<", liftBinBool unpackNumber (<))
+  , (">", liftBinBool unpackNumber (>))
+  , ("<=", liftBinBool unpackNumber (<=))
+  , (">=", liftBinBool unpackNumber (>=))
+  , ("&&", liftBinBool unpackBool (&&))
+  , ("||", liftBinBool unpackBool (||))
+  , ("string=?", liftBinBool unpackStr (==))
+  , ("string<?", liftBinBool unpackStr (<))
+  , ("string>?", liftBinBool unpackStr (>))
+  , ("string<=?", liftBinBool unpackStr (<=))
+  , ("string>=?", liftBinBool unpackStr (>=))
   ]
 
-numericBinF :: (Integer -> Integer -> Integer) -> [LispVal] -> Either LispError LispVal
-numericBinF _ [] = throwError $ ArgsArity 2 []
-numericBinF _ a@[_] = throwError $ ArgsArity 2 a
-numericBinF f as = Number . foldl1' f <$> mapM unpackNum as
+liftBinNumeric :: (Integer -> Integer -> Integer) -> [LispVal] -> Either LispError LispVal
+liftBinNumeric _ [] = throwError $ ArgsArity 2 []
+liftBinNumeric _ a@[_] = throwError $ ArgsArity 2 a
+liftBinNumeric f as = Number . foldl1' f <$> mapM unpackNumber as
 
-unpackNum :: LispVal -> Either LispError Integer
-unpackNum = \case
-  (Number n) -> pure n
-  v -> throwError $ TypeMismatch "number" v
+liftUnary :: (LispVal -> LispVal) -> [LispVal] -> Either LispError LispVal
+liftUnary f [a] = pure . f $ a
+liftUnary _ xs = throwError $ ArgsArity 1 xs
 
-unaryF :: (LispVal -> LispVal) -> [LispVal] -> Either LispError LispVal
-unaryF _ [] = throwError $ ArgsArity 1 []
-unaryF f [a] = pure . f $ a
-unaryF _ xs = throwError $ ArgsArity 1 xs
+liftBinBool :: (LispVal -> Either LispError a) -> (a -> a -> Bool) -> [LispVal] -> Either LispError LispVal
+liftBinBool unpack f [a, b] = Bool <$> liftA2 f (unpack a) (unpack b)
+liftBinBool _ _ xs = throwError $ ArgsArity 2 xs
+
+unpackVal :: String -> (LispVal -> Maybe a) -> LispVal -> Either LispError a
+unpackVal t f v = case f v of
+  Just a -> pure a
+  Nothing -> throwError $ TypeMismatch t v
+
+unpackNumber :: LispVal -> Either LispError Integer
+unpackNumber = unpackVal "number" $ \case Number n -> Just n; _ -> Nothing
+
+unpackBool :: LispVal -> Either LispError Bool
+unpackBool = unpackVal "boolean" $ \case Bool b -> Just b; _ -> Nothing
+
+unpackStr :: LispVal -> Either LispError String
+unpackStr = unpackVal "string" $ \case String s -> Just s; _ -> Nothing
 
 notP :: LispVal -> LispVal
 notP (Bool x) = Bool . not $ x
