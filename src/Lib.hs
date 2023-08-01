@@ -138,6 +138,45 @@ symbolToStringP (Atom s) = String s
 stringToSymbolP :: LispVal -> LispVal
 stringToSymbolP (String s) = Atom s
 
+car :: [LispVal] -> Either LispError LispVal
+car = \case
+  [List (x : _)] -> pure x
+  [DottedList (x : _) _] -> pure x
+  [other] -> throwError $ TypeMismatch "pair" other -- pair???
+  other -> throwError $ ArgsArity 1 other
+
+cdr :: [LispVal] -> Either LispError LispVal
+cdr = \case
+  [List (_ : xs)] -> pure $ List xs
+  [DottedList [_] t] -> pure t
+  [DottedList (_ : xs) t] -> pure $ DottedList xs t
+  [other] -> throwError $ TypeMismatch "pair" other
+  other -> throwError $ ArgsArity 1 other
+
+cons :: [LispVal] -> Either LispError LispVal
+cons = \case
+  [x, List []] -> pure $ List [x]
+  [x, List xs] -> pure $ List (x : xs)
+  [x, DottedList xs t] -> pure $ DottedList (x : xs) t
+  [x, y] -> pure $ DottedList [x] y
+  other -> throwError $ ArgsArity 2 other
+
+eqv :: [LispVal] -> Either LispError LispVal
+eqv = \case
+  [Bool a, Bool b] -> pure $ Bool (a == b)
+  [Number a, Number b] -> pure $ Bool (a == b)
+  [String a, String b] -> pure $ Bool (a == b)
+  [Atom a, Atom b] -> pure $ Bool (a == b)
+  [DottedList xs x, DottedList ys y] -> eqv [List (xs ++ [x]), List (ys ++ [y])]
+  [List xs, List ys] -> pure . Bool $ (length xs == length ys) && all eqvPair (zip xs ys)
+  [_, _] -> pure $ Bool False
+  other -> throwError $ ArgsArity 2 other
+ where
+  eqvPair :: (LispVal, LispVal) -> Bool -- todo: error handling
+  eqvPair (a, b) = case eqv [a, b] of
+    Left _ -> False
+    Right (Bool val) -> val
+
 readExpr :: String -> Either LispError LispVal
 readExpr s = case parse parseExpr "lisp" s of
   Left err -> throwError . ParsingError $ err
@@ -361,7 +400,7 @@ charMapF (c, r) = char c $> r
 escaped :: Parser Char
 escaped = do
   char '\\'
-  choice . map charMapF $ (charsEscapeMap ++ charsWhiteSpaceMap)
+  choice . map charMapF $ charsEscapeMap ++ charsWhiteSpaceMap
 
 symbol :: Parser Char
 symbol = oneOf "!$%&|*+-/:<=>?@^_~"
