@@ -22,9 +22,14 @@ eval = \case
   v@(String _) -> pure v
   v@(Number _) -> pure v
   v@(Bool _) -> pure v
+  (List [Atom "if", cond, conseq, alt]) ->
+    eval cond >>= \case
+      Bool True -> eval conseq
+      Bool False -> eval alt
+      other -> throwError $ TypeMismatch "boolean" other
   (List [Atom "quote", v]) -> pure v
   (List (Atom f : args)) -> mapM eval args >>= apply f
-  bad -> throwError . BadSpecialForm "Unrecognized special form" $ bad
+  other -> throwError $ BadSpecialForm "Unrecognized special form" other
 
 apply :: String -> [LispVal] -> Either LispError LispVal
 apply f args =
