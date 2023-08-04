@@ -1,4 +1,5 @@
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
@@ -70,6 +71,12 @@ primitives =
   , ("string>?", liftBinBool unpackStr (>))
   , ("string<=?", liftBinBool unpackStr (<=))
   , ("string>=?", liftBinBool unpackStr (>=))
+  , ("car", car)
+  , ("cdr", cdr)
+  , ("cons", cons)
+  , ("eq?", eqv)
+  , ("eqv?", eqv)
+  , ("equal?", equal)
   ]
 
 liftBinNumeric :: (Integer -> Integer -> Integer) -> [LispVal] -> Either LispError LispVal
@@ -97,7 +104,10 @@ unpackBool :: LispVal -> Either LispError Bool
 unpackBool = unpackVal "boolean" $ \case Bool b -> Just b; _ -> Nothing
 
 unpackStr :: LispVal -> Either LispError String
-unpackStr = unpackVal "string" $ \case String s -> Just s; _ -> Nothing
+unpackStr = unpackVal "string" $ \case
+  String s -> Just s
+  Number n -> Just (show n)
+  _ -> Nothing
 
 notP :: LispVal -> LispVal
 notP (Bool x) = Bool . not $ x
@@ -177,6 +187,20 @@ eqv = \case
     Left _ -> False
     Right (Bool val) -> val
 
+equal :: [LispVal] -> Either LispError LispVal
+equal [a, b] = do
+  primRes <-
+    or
+      <$> mapM
+        (unpackEquals a b)
+        [ AnyUnpacker unpackNumber
+        , AnyUnpacker unpackBool
+        , AnyUnpacker unpackStr
+        ]
+  eqvRes <- eqv [a, b]
+  pure $ Bool (primRes || let (Bool x) = eqvRes in x)
+equal other = throwError $ ArgsArity 2 other
+
 readExpr :: String -> Either LispError LispVal
 readExpr s = case parse parseExpr "lisp" s of
   Left err -> throwError . ParsingError $ err
@@ -245,6 +269,12 @@ instance Show LispError where
     (ParsingError e) -> "Parse error at " ++ show e
     (BadSpecialForm msg form) -> msg ++ ": " ++ show form
     (NotAFunction msg f) -> msg ++ ": " ++ f
+
+type Unpacker :: Type
+data Unpacker = forall a. (Eq a) => AnyUnpacker (LispVal -> Either LispError a)
+
+unpackEquals :: LispVal -> LispVal -> Unpacker -> Either LispError Bool
+unpackEquals a b (AnyUnpacker u) = liftA2 (==) (u a) (u b) `catchError` const (pure False)
 
 trapError :: (MonadError e m, Show e) => m String -> m String
 trapError = flip catchError (pure . show)
