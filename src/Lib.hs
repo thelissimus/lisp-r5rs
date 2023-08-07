@@ -29,6 +29,7 @@ eval = \case
       Bool False -> eval alt
       other -> throwError $ TypeMismatch "boolean" other
   (List (Atom "cond" : cs)) -> evalCond cs
+  (List (Atom "case" : key : cs)) -> eval key >>= flip evalCase cs
   (List [Atom "quote", v]) -> pure v
   (List (Atom f : args)) -> traverse eval args >>= apply f
   other -> throwError $ BadSpecialForm "Unrecognized special form" other
@@ -49,6 +50,25 @@ evalCond = \case
     [] -> throwError CondClause
   [] -> throwError CondClause
   other -> throwError $ TypeMismatch "cond clauses" (List other)
+
+evalCase :: LispVal -> [LispVal] -> Either LispError LispVal
+evalCase key = \case
+  [List (Atom "else" : alt)] -> evalLast alt
+  (List ((List keys) : conseq) : alts) ->
+    if any (lispTrue . (\k -> eqv [key, k])) keys
+      then evalLast conseq
+      else evalCase key alts
+  _ -> throwError CaseClause
+ where
+  lispTrue :: Either a LispVal -> Bool
+  lispTrue = \case
+    Right (Bool True) -> True
+    _ -> False
+
+evalLast :: [LispVal] -> Either LispError LispVal
+evalLast = \case
+  [] -> throwError $ ArgsArity 1 []
+  xs -> last <$> traverse eval xs
 
 apply :: String -> [LispVal] -> Either LispError LispVal
 apply f args =
@@ -282,6 +302,7 @@ data LispError
   | BadSpecialForm String LispVal
   | NotAFunction String String
   | CondClause -- todo: more detailed error; error for empty else case
+  | CaseClause
   deriving stock (Eq)
 
 instance Show LispError where
@@ -292,6 +313,7 @@ instance Show LispError where
     (BadSpecialForm msg form) -> msg ++ ": " ++ show form
     (NotAFunction msg f) -> msg ++ ": " ++ f
     CondClause -> "Expected at least 1 true cond clause"
+    CaseClause -> "Expected at least 1 true case clause"
 
 type Unpacker :: Type
 data Unpacker = forall a. (Eq a) => AnyUnpacker (LispVal -> Either LispError a)
