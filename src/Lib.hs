@@ -28,9 +28,27 @@ eval = \case
       Bool True -> eval conseq
       Bool False -> eval alt
       other -> throwError $ TypeMismatch "boolean" other
+  (List (Atom "cond" : cs)) -> evalCond cs
   (List [Atom "quote", v]) -> pure v
   (List (Atom f : args)) -> traverse eval args >>= apply f
   other -> throwError $ BadSpecialForm "Unrecognized special form" other
+
+evalCond :: [LispVal] -> Either LispError LispVal
+evalCond = \case
+  [List (Atom "else" : alt)] -> case alt of
+    [] -> throwError CondClause
+    cs -> last <$> traverse eval cs
+  (List clause : alts) -> case clause of
+    (cond : conseq) ->
+      eval cond >>= \case
+        Bool False -> evalCond alts
+        Bool True -> case conseq of
+          [] -> pure $ Bool True
+          cs -> last <$> traverse eval cs
+        other -> throwError $ TypeMismatch "boolean" other
+    [] -> throwError CondClause
+  [] -> throwError CondClause
+  other -> throwError $ TypeMismatch "cond clauses" (List other)
 
 apply :: String -> [LispVal] -> Either LispError LispVal
 apply f args =
@@ -263,6 +281,7 @@ data LispError
   | ParsingError ParseError
   | BadSpecialForm String LispVal
   | NotAFunction String String
+  | CondClause -- todo: more detailed error; error for empty else case
   deriving stock (Eq)
 
 instance Show LispError where
@@ -272,6 +291,7 @@ instance Show LispError where
     (ParsingError e) -> "Parse error at " ++ show e
     (BadSpecialForm msg form) -> msg ++ ": " ++ show form
     (NotAFunction msg f) -> msg ++ ": " ++ f
+    CondClause -> "Expected at least 1 true cond clause"
 
 type Unpacker :: Type
 data Unpacker = forall a. (Eq a) => AnyUnpacker (LispVal -> Either LispError a)
