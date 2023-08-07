@@ -29,7 +29,7 @@ eval = \case
       Bool False -> eval alt
       other -> throwError $ TypeMismatch "boolean" other
   (List [Atom "quote", v]) -> pure v
-  (List (Atom f : args)) -> mapM eval args >>= apply f
+  (List (Atom f : args)) -> traverse eval args >>= apply f
   other -> throwError $ BadSpecialForm "Unrecognized special form" other
 
 apply :: String -> [LispVal] -> Either LispError LispVal
@@ -82,7 +82,7 @@ primitives =
 liftBinNumeric :: (Integer -> Integer -> Integer) -> [LispVal] -> Either LispError LispVal
 liftBinNumeric _ [] = throwError $ ArgsArity 2 []
 liftBinNumeric _ a@[_] = throwError $ ArgsArity 2 a
-liftBinNumeric f as = Number . foldl1' f <$> mapM unpackNumber as
+liftBinNumeric f as = Number . foldl1' f <$> traverse unpackNumber as
 
 liftUnary :: (LispVal -> LispVal) -> [LispVal] -> Either LispError LispVal
 liftUnary f [a] = pure . f $ a
@@ -178,28 +178,31 @@ eqv = \case
   [String a, String b] -> pure $ Bool (a == b)
   [Atom a, Atom b] -> pure $ Bool (a == b)
   [DottedList xs x, DottedList ys y] -> eqv [List (xs ++ [x]), List (ys ++ [y])]
-  [List xs, List ys] -> pure . Bool $ (length xs == length ys) && all eqvPair (zip xs ys)
+  [List xs, List ys] -> pure . Bool $ (length xs == length ys) && all (byPairs eqv) (zip xs ys)
   [_, _] -> pure $ Bool False
   other -> throwError $ ArgsArity 2 other
- where
-  eqvPair :: (LispVal, LispVal) -> Bool -- todo: error handling
-  eqvPair (a, b) = case eqv [a, b] of
-    Left _ -> False
-    Right (Bool val) -> val
 
 equal :: [LispVal] -> Either LispError LispVal
-equal [a, b] = do
-  primRes <-
-    or
-      <$> mapM
-        (unpackEquals a b)
-        [ AnyUnpacker unpackNumber
-        , AnyUnpacker unpackBool
-        , AnyUnpacker unpackStr
-        ]
-  eqvRes <- eqv [a, b]
-  pure $ Bool (primRes || let (Bool x) = eqvRes in x)
-equal other = throwError $ ArgsArity 2 other
+equal = \case
+  [DottedList xs x, DottedList ys y] -> equal [List (xs ++ [x]), List (ys ++ [y])]
+  [List xs, List ys] -> pure . Bool $ (length xs == length ys) && all (byPairs equal) (zip xs ys)
+  [a, b] -> do
+    primRes <-
+      or
+        <$> traverse
+          (unpackEquals a b)
+          [ AnyUnpacker unpackNumber
+          , AnyUnpacker unpackBool
+          , AnyUnpacker unpackStr
+          ]
+    eqvRes <- eqv [a, b]
+    pure $ Bool (primRes || let (Bool x) = eqvRes in x)
+  other -> throwError $ ArgsArity 2 other
+
+byPairs :: ([a] -> Either LispError LispVal) -> (a, a) -> Bool
+byPairs f (a, b) = case f [a, b] of
+  Left _ -> False
+  Right (Bool val) -> val
 
 readExpr :: String -> Either LispError LispVal
 readExpr s = case parse parseExpr "lisp" s of
