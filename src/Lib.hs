@@ -15,8 +15,25 @@ import Data.Kind (Type)
 import Data.List (foldl1')
 import Data.Ratio (denominator, numerator, (%))
 import Numeric (readBin, readDec, readHex, readOct)
-
-import Text.ParserCombinators.Parsec hiding (spaces)
+import Text.ParserCombinators.Parsec
+  ( ParseError
+  , Parser
+  , char
+  , choice
+  , digit
+  , letter
+  , many
+  , many1
+  , noneOf
+  , oneOf
+  , parse
+  , sepBy
+  , skipMany1
+  , space
+  , string
+  , try
+  , (<|>)
+  )
 
 eval :: LispVal -> Either LispError LispVal
 eval = \case
@@ -290,9 +307,9 @@ instance Show LispVal where
     (Complex (r :+ i)) -> show r ++ "+" ++ show i ++ "i"
     (Char c) -> show c
     (String s) -> show s
-    (List xs) -> "(" ++ unwordsList xs ++ ")"
-    (DottedList xs t) -> "(" ++ unwordsList xs ++ " . " ++ show t ++ ")"
-    (Vector xs) -> "#(" ++ unwordsList (elems xs) ++ ")"
+    (List xs) -> "(" ++ (unwords . map show) xs ++ ")"
+    (DottedList xs t) -> "(" ++ (unwords . map show) xs ++ " . " ++ show t ++ ")"
+    (Vector xs) -> "#(" ++ (unwords . map show) (elems xs) ++ ")"
 
 type LispError :: Type
 data LispError
@@ -307,7 +324,7 @@ data LispError
 
 instance Show LispError where
   show = \case
-    (ArgsArity n vals) -> "Expected " ++ show n ++ " args; found values " ++ unwordsList vals
+    (ArgsArity n vals) -> "Expected " ++ show n ++ " args; found values " ++ (unwords . map show) vals
     (TypeMismatch t val) -> "Invalid type: expected " ++ t ++ ", found " ++ show val
     (ParsingError e) -> "Parse error at " ++ show e
     (BadSpecialForm msg form) -> msg ++ ": " ++ show form
@@ -418,7 +435,7 @@ parseList = char '(' >> (parseEmpty <|> parsePopulated)
   parsePopulated = parseExpr >>= decide . pure
 
   decide :: [LispVal] -> Parser LispVal
-  decide expr = plainList expr <|> (spaces >> dottedList expr)
+  decide expr = plainList expr <|> (skipMany1 space >> dottedList expr)
 
   plainList :: [LispVal] -> Parser LispVal
   plainList expr = char ')' $> List (reverse expr)
@@ -426,7 +443,7 @@ parseList = char '(' >> (parseEmpty <|> parsePopulated)
   dottedList :: [LispVal] -> Parser LispVal
   dottedList expr =
     do
-      char '.' >> spaces
+      char '.' >> skipMany1 space
       dotted <- parseExpr
       char ')'
       pure $ DottedList expr dotted
@@ -459,7 +476,7 @@ parseUnquoteSplicing = do
 parseVector :: Parser LispVal
 parseVector = do
   string "#("
-  vec <- sepBy parseExpr spaces
+  vec <- sepBy parseExpr (skipMany1 space)
   char ')'
   pure $ Vector (listArray (1, length vec) vec)
 
@@ -479,9 +496,3 @@ escaped = do
 
 symbol :: Parser Char
 symbol = oneOf "!$%&|*+-/:<=>?@^_~"
-
-spaces :: Parser ()
-spaces = skipMany1 space
-
-unwordsList :: [LispVal] -> String
-unwordsList = unwords . map show
