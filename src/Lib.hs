@@ -96,43 +96,46 @@ apply f args =
 
 primitives :: [(String, [LispVal] -> Either LispError LispVal)]
 primitives =
-  [ ("+", liftBinNumeric (+))
-  , ("-", liftBinNumeric (-))
-  , ("*", liftBinNumeric (*))
-  , ("/", liftBinNumeric div)
-  , ("mod", liftBinNumeric mod)
-  , ("quotient", liftBinNumeric quot)
-  , ("remainder", liftBinNumeric rem)
-  , ("not", liftUnary notP)
-  , ("boolean?", liftUnary booleanP)
-  , ("list?", liftUnary listP)
-  , ("symbol?", liftUnary symbolP)
-  , ("number?", liftUnary numberP)
-  , ("char?", liftUnary charP)
-  , ("string?", liftUnary stringP)
-  , ("vector?", liftUnary vectorP)
-  , ("symbol->string", liftUnary symbolToStringP)
-  , ("string->symbol", liftUnary stringToSymbolP)
-  , ("=", liftBinBool unpackNumber (==))
-  , ("/=", liftBinBool unpackNumber (/=))
-  , ("<", liftBinBool unpackNumber (<))
-  , (">", liftBinBool unpackNumber (>))
-  , ("<=", liftBinBool unpackNumber (<=))
-  , (">=", liftBinBool unpackNumber (>=))
-  , ("&&", liftBinBool unpackBool (&&))
-  , ("||", liftBinBool unpackBool (||))
-  , ("string=?", liftBinBool unpackStr (==))
-  , ("string<?", liftBinBool unpackStr (<))
-  , ("string>?", liftBinBool unpackStr (>))
-  , ("string<=?", liftBinBool unpackStr (<=))
-  , ("string>=?", liftBinBool unpackStr (>=))
-  , ("car", car)
-  , ("cdr", cdr)
-  , ("cons", cons)
-  , ("eq?", eqv)
-  , ("eqv?", eqv)
-  , ("equal?", equal)
+  [ "+" ~> liftBinNumeric (+)
+  , "-" ~> liftBinNumeric (-)
+  , "*" ~> liftBinNumeric (*)
+  , "/" ~> liftBinNumeric div
+  , "mod" ~> liftBinNumeric mod
+  , "quotient" ~> liftBinNumeric quot
+  , "remainder" ~> liftBinNumeric rem
+  , "not" ~> liftUnary notP
+  , "boolean?" ~> liftUnary booleanP
+  , "list?" ~> liftUnary listP
+  , "symbol?" ~> liftUnary symbolP
+  , "number?" ~> liftUnary numberP
+  , "char?" ~> liftUnary charP
+  , "string?" ~> liftUnary stringP
+  , "vector?" ~> liftUnary vectorP
+  , "symbol->string" ~> liftUnary symbolToStringP
+  , "string->symbol" ~> liftUnary stringToSymbolP
+  , "=" ~> liftBinBool unpackNumber (==)
+  , "/=" ~> liftBinBool unpackNumber (/=)
+  , "<" ~> liftBinBool unpackNumber (<)
+  , ">" ~> liftBinBool unpackNumber (>)
+  , "<=" ~> liftBinBool unpackNumber (<=)
+  , ">=" ~> liftBinBool unpackNumber (>=)
+  , "&&" ~> liftBinBool unpackBool (&&)
+  , "||" ~> liftBinBool unpackBool (||)
+  , "string=?" ~> liftBinBool unpackStr (==)
+  , "string<?" ~> liftBinBool unpackStr (<)
+  , "string>?" ~> liftBinBool unpackStr (>)
+  , "string<=?" ~> liftBinBool unpackStr (<=)
+  , "string>=?" ~> liftBinBool unpackStr (>=)
+  , "car" ~> car
+  , "cdr" ~> cdr
+  , "cons" ~> cons
+  , "eq?" ~> eqv
+  , "eqv?" ~> eqv
+  , "equal?" ~> equal
   ]
+ where
+  (~>) :: a -> b -> (a, b)
+  name ~> fn = (name, fn)
 
 liftBinNumeric :: (Integer -> Integer -> Integer) -> [LispVal] -> Either LispError LispVal
 liftBinNumeric _ [] = throwError $ ArgsArity 2 []
