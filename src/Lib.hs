@@ -259,25 +259,27 @@ byPairs f (a, b) = case f [a, b] of
 
 readExpr :: Text -> Either LispError LispVal
 readExpr s = case parse parseExpr "lisp" s of
-  Left err -> throwError . ParsingError $ err
+  Left err -> throwError $ ParsingError err
   Right val -> pure val
 
 parseExpr :: Parser LispVal
 parseExpr =
-  parseAtom
-    <|> parseString
-    <|> try parseChar
-    <|> try parseComplex
-    <|> try parseFloat
-    <|> try parseRatio
-    <|> try parseNumber
-    <|> try parseBool
-    <|> parseQuoted
-    <|> parseQuasiquote
-    <|> try parseUnquoteSplicing
-    <|> parseUnquote
-    <|> parseVector
-    <|> parseList
+  choice
+    [ parseAtom
+    , parseString
+    , try parseChar
+    , try parseComplex
+    , try parseFloat
+    , try parseRatio
+    , try parseNumber
+    , try parseBool
+    , parseQuoted
+    , parseQuasiquote
+    , try parseUnquoteSplicing
+    , parseUnquote
+    , parseVector
+    , parseList
+    ]
 
 type LispVal :: Type
 data LispVal
