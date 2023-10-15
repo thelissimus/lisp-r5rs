@@ -27,6 +27,60 @@ import Text.Megaparsec.Char.Lexer qualified as L
 type Parser :: Type -> Type
 type Parser = Parsec Void Text
 
+type LispVal :: Type
+data LispVal
+  = Atom Text
+  | Bool Bool
+  | Number Integer
+  | Ratio Rational
+  | Float Double
+  | Complex (Complex Double)
+  | Char Char
+  | String Text
+  | List [LispVal]
+  | DottedList [LispVal] LispVal
+  | Vector (Vector LispVal)
+  deriving stock (Eq)
+
+instance Show LispVal where
+  show = \case
+    (Atom iden) -> show iden
+    (Bool True) -> "#t"
+    (Bool False) -> "#f"
+    (Number n) -> show n
+    (Ratio n) -> show (numerator n) ++ "/" ++ show (denominator n)
+    (Float n) -> show n
+    (Complex (r :+ i)) -> show r ++ "+" ++ show i ++ "i"
+    (Char c) -> show c
+    (String s) -> show s
+    (List xs) -> "(" ++ (unwords . map show) xs ++ ")"
+    (DottedList xs t) -> "(" ++ (unwords . map show) xs ++ " . " ++ show t ++ ")"
+    (Vector xs) -> "#(" ++ (unwords . map show) (V.toList xs) ++ ")"
+
+type LispError :: Type
+data LispError
+  = ArgsArity Integer [LispVal]
+  | TypeMismatch Text LispVal
+  | ParsingError (ParseErrorBundle Text Void)
+  | BadSpecialForm String LispVal
+  | NotAFunction Text Text
+  | CondClause -- todo: more detailed error; error for empty else case
+  | CaseClause
+  deriving stock (Eq)
+
+instance Show LispError where
+  show = \case
+    (ArgsArity n vals) -> "Expected " ++ show n ++ " args; found values " ++ (unwords . map show) vals
+    (TypeMismatch t val) -> "Invalid type: expected " ++ show t ++ ", found " ++ show val
+    (ParsingError e) -> "Parse error at " ++ show e
+    (BadSpecialForm msg form) -> show msg ++ ": " ++ show form
+    (NotAFunction msg f) -> show msg ++ ": " ++ show f
+    CondClause -> "Expected at least 1 true cond clause"
+    CaseClause -> "Expected at least 1 true case clause"
+
+type Unpacker :: Type
+data Unpacker = forall a. (Eq a) => AnyUnpacker (LispVal -> Either LispError a)
+
 eval :: LispVal -> Either LispError LispVal
 eval = \case
   v@(String _) -> pure v
@@ -280,60 +334,6 @@ parseExpr =
     , parseVector
     , parseList
     ]
-
-type LispVal :: Type
-data LispVal
-  = Atom Text
-  | Bool Bool
-  | Number Integer
-  | Ratio Rational
-  | Float Double
-  | Complex (Complex Double)
-  | Char Char
-  | String Text
-  | List [LispVal]
-  | DottedList [LispVal] LispVal
-  | Vector (Vector LispVal)
-  deriving stock (Eq)
-
-instance Show LispVal where
-  show = \case
-    (Atom iden) -> show iden
-    (Bool True) -> "#t"
-    (Bool False) -> "#f"
-    (Number n) -> show n
-    (Ratio n) -> show (numerator n) ++ "/" ++ show (denominator n)
-    (Float n) -> show n
-    (Complex (r :+ i)) -> show r ++ "+" ++ show i ++ "i"
-    (Char c) -> show c
-    (String s) -> show s
-    (List xs) -> "(" ++ (unwords . map show) xs ++ ")"
-    (DottedList xs t) -> "(" ++ (unwords . map show) xs ++ " . " ++ show t ++ ")"
-    (Vector xs) -> "#(" ++ (unwords . map show) (V.toList xs) ++ ")"
-
-type LispError :: Type
-data LispError
-  = ArgsArity Integer [LispVal]
-  | TypeMismatch Text LispVal
-  | ParsingError (ParseErrorBundle Text Void)
-  | BadSpecialForm String LispVal
-  | NotAFunction Text Text
-  | CondClause -- todo: more detailed error; error for empty else case
-  | CaseClause
-  deriving stock (Eq)
-
-instance Show LispError where
-  show = \case
-    (ArgsArity n vals) -> "Expected " ++ show n ++ " args; found values " ++ (unwords . map show) vals
-    (TypeMismatch t val) -> "Invalid type: expected " ++ show t ++ ", found " ++ show val
-    (ParsingError e) -> "Parse error at " ++ show e
-    (BadSpecialForm msg form) -> show msg ++ ": " ++ show form
-    (NotAFunction msg f) -> show msg ++ ": " ++ show f
-    CondClause -> "Expected at least 1 true cond clause"
-    CaseClause -> "Expected at least 1 true case clause"
-
-type Unpacker :: Type
-data Unpacker = forall a. (Eq a) => AnyUnpacker (LispVal -> Either LispError a)
 
 unpackEquals :: LispVal -> LispVal -> Unpacker -> Either LispError Bool
 unpackEquals a b (AnyUnpacker u) = liftA2 (==) (u a) (u b) `catchError` const (pure False)
