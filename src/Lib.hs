@@ -1,38 +1,31 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Lib (module Lib) where
 
 import Control.Applicative (liftA2)
+import Control.Monad (void)
 import Control.Monad.Except (MonadError (catchError, throwError))
 
-import Data.Array (Array, elems, listArray)
 import Data.Complex (Complex ((:+)))
 import Data.Functor (($>), (<&>))
 import Data.Kind (Type)
 import Data.List (foldl1')
 import Data.Ratio (denominator, numerator, (%))
+import Data.Text (Text)
+import Data.Text qualified as T
+import Data.Vector (Vector)
+import Data.Vector qualified as V
+import Data.Void (Void)
 
 import Numeric (readBin, readDec, readHex, readOct)
 
-import Text.ParserCombinators.Parsec
-  ( ParseError
-  , Parser
-  , char
-  , choice
-  , digit
-  , letter
-  , many
-  , many1
-  , noneOf
-  , oneOf
-  , parse
-  , sepBy
-  , skipMany1
-  , space
-  , string
-  , try
-  , (<|>)
-  )
+import Text.Megaparsec
+import Text.Megaparsec.Char
+import Text.Megaparsec.Char.Lexer qualified as L
+
+type Parser :: Type -> Type
+type Parser = Parsec Void Text
 
 eval :: LispVal -> Either LispError LispVal
 eval = \case
@@ -86,14 +79,14 @@ evalLast = \case
   [] -> throwError $ ArgsArity 1 []
   xs -> last <$> traverse eval xs
 
-apply :: String -> [LispVal] -> Either LispError LispVal
+apply :: Text -> [LispVal] -> Either LispError LispVal
 apply f args =
   maybe
-    (throwError . NotAFunction "Unrecognized primitive function args" $ f)
+    (throwError $ NotAFunction "Unrecognized primitive function args" f)
     ($ args)
     (lookup f primitives)
 
-primitives :: [(String, [LispVal] -> Either LispError LispVal)]
+primitives :: [(Text, [LispVal] -> Either LispError LispVal)]
 primitives =
   [ "+" ~> liftBinNumeric (+)
   , "-" ~> liftBinNumeric (-)
@@ -149,7 +142,7 @@ liftBinBool :: (LispVal -> Either LispError a) -> (a -> a -> Bool) -> [LispVal] 
 liftBinBool unpack f [a, b] = Bool <$> liftA2 f (unpack a) (unpack b)
 liftBinBool _ _ xs = throwError $ ArgsArity 2 xs
 
-unpackVal :: String -> (LispVal -> Maybe a) -> LispVal -> Either LispError a
+unpackVal :: Text -> (LispVal -> Maybe a) -> LispVal -> Either LispError a
 unpackVal t f v = case f v of
   Just a -> pure a
   Nothing -> throwError $ TypeMismatch t v
@@ -160,10 +153,10 @@ unpackNumber = unpackVal "number" $ \case Number n -> Just n; _ -> Nothing
 unpackBool :: LispVal -> Either LispError Bool
 unpackBool = unpackVal "boolean" $ \case Bool b -> Just b; _ -> Nothing
 
-unpackStr :: LispVal -> Either LispError String
+unpackStr :: LispVal -> Either LispError Text
 unpackStr = unpackVal "string" $ \case
   String s -> Just s
-  Number n -> Just (show n)
+  Number n -> Just (T.pack . show $ n)
   _ -> Nothing
 
 notP :: LispVal -> LispVal
@@ -201,9 +194,11 @@ vectorP _ = Bool False
 
 symbolToStringP :: LispVal -> LispVal
 symbolToStringP (Atom s) = String s
+symbolToStringP _ = undefined
 
 stringToSymbolP :: LispVal -> LispVal
 stringToSymbolP (String s) = Atom s
+stringToSymbolP _ = undefined
 
 car :: [LispVal] -> Either LispError LispVal
 car = \case
@@ -260,8 +255,9 @@ byPairs :: ([a] -> Either LispError LispVal) -> (a, a) -> Bool
 byPairs f (a, b) = case f [a, b] of
   Left _ -> False
   Right (Bool val) -> val
+  _ -> undefined
 
-readExpr :: String -> Either LispError LispVal
+readExpr :: Text -> Either LispError LispVal
 readExpr s = case parse parseExpr "lisp" s of
   Left err -> throwError . ParsingError $ err
   Right val -> pure val
@@ -285,22 +281,22 @@ parseExpr =
 
 type LispVal :: Type
 data LispVal
-  = Atom String
+  = Atom Text
   | Bool Bool
   | Number Integer
   | Ratio Rational
   | Float Double
   | Complex (Complex Double)
   | Char Char
-  | String String
+  | String Text
   | List [LispVal]
   | DottedList [LispVal] LispVal
-  | Vector (Array Int LispVal)
+  | Vector (Vector LispVal)
   deriving stock (Eq)
 
 instance Show LispVal where
   show = \case
-    (Atom iden) -> iden
+    (Atom iden) -> show iden
     (Bool True) -> "#t"
     (Bool False) -> "#f"
     (Number n) -> show n
@@ -311,15 +307,15 @@ instance Show LispVal where
     (String s) -> show s
     (List xs) -> "(" ++ (unwords . map show) xs ++ ")"
     (DottedList xs t) -> "(" ++ (unwords . map show) xs ++ " . " ++ show t ++ ")"
-    (Vector xs) -> "#(" ++ (unwords . map show) (elems xs) ++ ")"
+    (Vector xs) -> "#(" ++ (unwords . map show) (V.toList xs) ++ ")"
 
 type LispError :: Type
 data LispError
   = ArgsArity Integer [LispVal]
-  | TypeMismatch String LispVal
-  | ParsingError ParseError
+  | TypeMismatch Text LispVal
+  | ParsingError (ParseErrorBundle Text Void)
   | BadSpecialForm String LispVal
-  | NotAFunction String String
+  | NotAFunction Text Text
   | CondClause -- todo: more detailed error; error for empty else case
   | CaseClause
   deriving stock (Eq)
@@ -327,10 +323,10 @@ data LispError
 instance Show LispError where
   show = \case
     (ArgsArity n vals) -> "Expected " ++ show n ++ " args; found values " ++ (unwords . map show) vals
-    (TypeMismatch t val) -> "Invalid type: expected " ++ t ++ ", found " ++ show val
+    (TypeMismatch t val) -> "Invalid type: expected " ++ show t ++ ", found " ++ show val
     (ParsingError e) -> "Parse error at " ++ show e
-    (BadSpecialForm msg form) -> msg ++ ": " ++ show form
-    (NotAFunction msg f) -> msg ++ ": " ++ f
+    (BadSpecialForm msg form) -> show msg ++ ": " ++ show form
+    (NotAFunction msg f) -> show msg ++ ": " ++ show f
     CondClause -> "Expected at least 1 true cond clause"
     CaseClause -> "Expected at least 1 true case clause"
 
@@ -345,87 +341,90 @@ trapError = flip catchError (pure . show)
 
 parseAtom :: Parser LispVal
 parseAtom = do
-  first <- letter <|> symbol
-  rest <- many (letter <|> digit <|> symbol)
-  pure $ Atom (first : rest)
+  first <- letterChar <|> symbol
+  rest <- T.pack <$> many (letterChar <|> digitChar <|> symbol)
+  pure $ Atom (T.cons first rest)
 
 parseBool :: Parser LispVal
 parseBool = do
-  char '#'
-  oneOf "tf" <&> \case
+  void (char '#')
+  oneOf ("tf" :: [Char]) <&> \case
     't' -> Bool True
     'f' -> Bool False
+    _ -> undefined
 
 parseNumber :: Parser LispVal
 parseNumber = parseNumberPlain <|> parseNumberRadix
 
 parseNumberPlain :: Parser LispVal
-parseNumberPlain = Number . read <$> many1 digit
+parseNumberPlain = Number . read <$> some digitChar
 
 parseNumberRadix :: Parser LispVal
 parseNumberRadix = do
-  char '#'
+  void (char '#')
   parseNumberBinary <|> parseNumberOctal <|> parseNumberDecimal <|> parseNumberHexadecimal
 
 parseNumberBinary :: Parser LispVal
 parseNumberBinary = do
-  char 'b'
-  Number . (fst . head) . readBin <$> many (oneOf "01")
+  void (char 'b')
+  Number . (fst . head) . readBin <$> many (oneOf ("01" :: [Char]))
 
 parseNumberOctal :: Parser LispVal
 parseNumberOctal = do
-  char 'o'
-  Number . (fst . head) . readOct <$> many (oneOf "012344567")
+  void (char 'o')
+  Number . (fst . head) . readOct <$> many (oneOf ("012344567" :: [Char]))
 
 parseNumberDecimal :: Parser LispVal
 parseNumberDecimal = do
-  char 'd'
-  Number . (fst . head) . readDec <$> many (oneOf "0123456789")
+  void (char 'd')
+  Number . (fst . head) . readDec <$> many (oneOf ("0123456789" :: [Char]))
 
 parseNumberHexadecimal :: Parser LispVal
 parseNumberHexadecimal = do
-  char 'x'
-  Number . (fst . head) . readHex <$> many (oneOf "01234567890abcdefABCDEF")
+  void (char 'x')
+  Number . (fst . head) . readHex <$> many (oneOf ("01234567890abcdefABCDEF" :: [Char]))
 
 parseRatio :: Parser LispVal
 parseRatio = do
-  n <- read <$> many1 digit
-  char '/'
-  d <- read <$> many1 digit
+  n <- read <$> some digitChar
+  void (char '/')
+  d <- read <$> some digitChar
   pure $ Ratio (n % d)
 
 parseFloat :: Parser LispVal
 parseFloat = do
-  w <- many1 digit
-  char '.'
-  d <- many1 digit
+  w <- some digitChar
+  void (char '.')
+  d <- some digitChar
   pure $ Float (read (w ++ "." ++ d))
 
 parseComplex :: Parser LispVal
 parseComplex = do
   r <- toDouble <$> (try parseFloat <|> parseNumberPlain)
-  char '+'
+  void (char '+')
   i <- toDouble <$> (try parseFloat <|> parseNumberPlain)
-  char 'i'
+  void (char 'i')
   pure $ Complex (r :+ i)
  where
   toDouble (Float n) = n
   toDouble (Number n) = fromIntegral n
+  toDouble _ = undefined
 
 parseChar :: Parser LispVal
 parseChar = do
-  string "#\\"
-  many1 letter <&> \case
+  void (string "#\\")
+  some letterChar <&> \case
     "space" -> Char ' '
     "newline" -> Char '\n'
     [c] -> Char c
+    _ -> undefined
 
 parseString :: Parser LispVal
 parseString = do
-  char '"'
-  x <- many (escaped <|> noneOf (map fst charsEscapeMap))
-  char '"'
-  pure (String x)
+  void (char '"')
+  str <- T.pack <$> many (escaped <|> noneOf (map fst charsEscapeMap))
+  void (char '"')
+  pure (String str)
 
 parseList :: Parser LispVal
 parseList = char '(' >> (parseEmpty <|> parsePopulated)
@@ -437,7 +436,7 @@ parseList = char '(' >> (parseEmpty <|> parsePopulated)
   parsePopulated = parseExpr >>= decide . pure
 
   decide :: [LispVal] -> Parser LispVal
-  decide expr = plainList expr <|> (skipMany1 space >> dottedList expr)
+  decide expr = plainList expr <|> (sc >> dottedList expr)
 
   plainList :: [LispVal] -> Parser LispVal
   plainList expr = char ')' $> List (reverse expr)
@@ -445,42 +444,42 @@ parseList = char '(' >> (parseEmpty <|> parsePopulated)
   dottedList :: [LispVal] -> Parser LispVal
   dottedList expr =
     do
-      char '.' >> skipMany1 space
+      char '.' >> sc
       dotted <- parseExpr
-      char ')'
+      void (char ')')
       pure $ DottedList expr dotted
       <|> (parseExpr >>= \next -> decide (next : expr))
 
 parseQuoted :: Parser LispVal
 parseQuoted = do
-  char '\''
+  void (char '\'')
   expr <- parseExpr
   pure $ List [Atom "quote", expr]
 
 parseQuasiquote :: Parser LispVal
 parseQuasiquote = do
-  char '`'
+  void (char '`')
   expr <- parseExpr
   pure $ List [Atom "quasiquote", expr]
 
 parseUnquote :: Parser LispVal
 parseUnquote = do
-  char ','
+  void (char ',')
   expr <- parseExpr
   pure $ List [Atom "unquote", expr]
 
 parseUnquoteSplicing :: Parser LispVal
 parseUnquoteSplicing = do
-  string ",@"
+  void (string ",@")
   expr <- parseExpr
   pure $ List [Atom "unquote-splicing", expr]
 
 parseVector :: Parser LispVal
 parseVector = do
-  string "#("
-  vec <- sepBy parseExpr (skipMany1 space)
-  char ')'
-  pure $ Vector (listArray (1, length vec) vec)
+  void (string "#(")
+  vec <- sepBy parseExpr sc
+  void (char ')')
+  pure $ Vector (V.fromList vec)
 
 charsEscapeMap :: [(Char, Char)]
 charsEscapeMap = [('\\', '\\'), ('"', '"')]
@@ -493,8 +492,11 @@ charMapF (c, r) = char c $> r
 
 escaped :: Parser Char
 escaped = do
-  char '\\'
+  void (char '\\')
   choice . map charMapF $ charsEscapeMap ++ charsWhiteSpaceMap
 
 symbol :: Parser Char
-symbol = oneOf "!$%&|*+-/:<=>?@^_~"
+symbol = oneOf ("!$%&|*+-/:<=>?@^_~" :: [Char])
+
+sc :: Parser ()
+sc = L.space space1 (L.skipLineComment ";") (L.skipBlockCommentNested "#|" "|#")

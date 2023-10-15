@@ -24,10 +24,11 @@ library
   other-modules:   Paths_r5rs
   hs-source-dirs:  src
   build-depends:
-    , array
-    , base    ^>=4.17.2.0
+    , base        ^>=4.17.2.0
+    , megaparsec
     , mtl
-    , parsec
+    , text
+    , vector
 
 executable r5rs
   import:         warnings, defaults
@@ -37,3 +38,4 @@ executable r5rs
   build-depends:
     , base  ^>=4.17.2.0
     , r5rs
+    , text
