@@ -1,20 +1,19 @@
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE Safe #-}
-{-# LANGUAGE StandaloneKindSignatures #-}
 
 module Lib (module Lib) where
 
 import Control.Applicative (liftA2)
 import Control.Monad.Except (MonadError (catchError, throwError))
+
 import Data.Array (Array, elems, listArray)
 import Data.Complex (Complex ((:+)))
 import Data.Functor (($>), (<&>))
 import Data.Kind (Type)
 import Data.List (foldl1')
 import Data.Ratio (denominator, numerator, (%))
+
 import Numeric (readBin, readDec, readHex, readOct)
+
 import Text.ParserCombinators.Parsec
   ( ParseError
   , Parser

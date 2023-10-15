@@ -1,8 +1,7 @@
-{-# LANGUAGE Safe #-}
-
 module Main (main) where
 
 import Data.Either (fromRight)
+
 import Lib (eval, readExpr, trapError)
 
 main :: IO ()

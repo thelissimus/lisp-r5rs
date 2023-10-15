@@ -1,38 +1,39 @@
-cabal-version: 1.12
+cabal-version: 3.0
+name:          r5rs
+version:       0.0.0.0
+license:       BSD-3-Clause
+license-file:  LICENSE
+build-type:    Simple
 
--- This file has been generated from package.yaml by hpack version 0.35.2.
---
--- see: https://github.com/sol/hpack
+common warnings
+  ghc-options:
+    -Wall -Wextra -Weverything -Wcompat -Wno-implicit-prelude
+    -Wno-unsafe -Wno-missing-safe-haskell-mode
+    -Wno-missing-local-signatures -Wno-missing-import-lists -haddock
 
-name:           r5rs
-version:        0.0.0.0
-license:        BSD3
-license-file:   LICENSE
-build-type:     Simple
+common defaults
+  default-language:   GHC2021
+  default-extensions:
+    BlockArguments
+    DerivingStrategies
+    UnicodeSyntax
 
 library
-  exposed-modules:
-      Lib
-  other-modules:
-      Paths_r5rs
-  hs-source-dirs:
-      src
-  ghc-options: -Wall -Wextra -Weverything -Wcompat -Wno-implicit-prelude -Wno-unused-do-bind -haddock
+  import:          warnings, defaults
+  exposed-modules: Lib
+  other-modules:   Paths_r5rs
+  hs-source-dirs:  src
   build-depends:
-      array
-    , base
+    , array
+    , base    ^>=4.17.2.0
     , mtl
     , parsec
-  default-language: Haskell2010
 
 executable r5rs
-  main-is: Main.hs
-  other-modules:
-      Paths_r5rs
-  hs-source-dirs:
-      app
-  ghc-options: -Wall -Wextra -Weverything -Wcompat -Wno-implicit-prelude -Wno-unused-do-bind -haddock
+  import:         warnings, defaults
+  main-is:        Main.hs
+  other-modules:  Paths_r5rs
+  hs-source-dirs: app
   build-depends:
-      base
+    , base  ^>=4.17.2.0
     , r5rs
-  default-language: Haskell2010
